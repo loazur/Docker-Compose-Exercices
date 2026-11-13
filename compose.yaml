@@ -1,0 +1,69 @@
+services:
+  db: # Exercice 1: Service de données isolé (PostgreSQL)
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: appdb
+      POSTGRES_USER: etudiant
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U etudiant -d appdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    secrets:
+      - db_password
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - reseau_interne
+
+  api: # Exercice 2: Ajout d'une API dépendante (Node.js)
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./api:/app
+    command: sh -c "npm install && node server.js"
+    ports:
+      - "5000:5000"
+    environment:
+      POSTGRES_DB: appdb
+      POSTGRES_USER: etudiant
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - reseau_interne
+      - reseau_public
+
+  frontend: # Exercice 3.2: Service frontend sur le réseau public
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: sh -c "npm install && npm start"
+    environment:
+      HOST: 0.0.0.0
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    networks:
+      - reseau_public
+
+# Déclaration des réseaux virtuels isolés
+networks:
+  reseau_interne:
+  reseau_public: # Exercice 3.2: Réseau exposé au frontend et à l'API
+
+# Déclaration des volumes persistants
+volumes:
+  pg_data:
+
+# Exercice 4: Secret Docker local pour le mot de passe PostgreSQL
+secrets:
+  db_password:
+    file: ./db_password.txt
